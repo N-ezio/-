@@ -215,20 +215,25 @@ class Application:
             pinyin = lazy_pinyin(name)
             self.engname_var.set(' '.join(p.upper() for p in pinyin))
 
+
+
     def add_to_list(self):
         raw_date = self.date_var.get()
         formatted_date = raw_date
-
         if raw_date.isdigit() and len(raw_date) == 8:
             try:
                 y, m, d = raw_date[:4], raw_date[4:6], raw_date[6:8]
-                datetime.strptime(f"{y}-{m}-{d}", "%Y-%m-%d")  # 校验
+                datetime.strptime(f"{y}-{m}-{d}", "%Y-%m-%d")
                 formatted_date = f"{y}-{m}-{d}"
             except ValueError:
-                pass  # 无效格式跳过转换
+                pass
 
-        data = [
-            len(self.entries) + 1,
+        all_items = self.tree.get_children()
+        selected_item = self.tree.focus()
+        total = len(all_items)
+
+        new_data = [
+            None,  # 序号稍后处理
             self.name_var.get(),
             self.engname_var.get(),
             self.id_var.get(),
@@ -239,9 +244,45 @@ class Application:
             self.note_var.get()
         ]
 
-        self.entries.append(data)
-        self.tree.insert('', tk.END, values=data)
-      
+        # 如果选中行，更新该行；否则添加新行
+        if selected_item:
+            index = self.tree.index(selected_item)
+            old_values = list(self.tree.item(selected_item, 'values'))
+            for i in range(1, 9):
+                if new_data[i]:
+                    old_values[i] = new_data[i]
+            self.entries[index] = old_values
+            self.tree.item(selected_item, values=old_values)
+
+            # 自动选中下一行或新建新行
+            if index + 1 < total:
+                next_item = all_items[index + 1]
+                self.tree.selection_set(next_item)
+                self.tree.focus(next_item)
+                self.tree.see(next_item)
+            else:
+                # 已是最后一行，自动添加新行
+                new_index = total + 1
+                new_row = [new_index] + [x or "" for x in new_data[1:]]
+                self.entries.append(new_row)
+                item = self.tree.insert('', tk.END, values=new_row)
+                self.tree.selection_set(item)
+                self.tree.focus(item)
+                self.tree.see(item)
+        else:
+            # 没有选中行，直接添加新行
+            new_index = total + 1
+            new_row = [new_index] + [x or "" for x in new_data[1:]]
+            self.entries.append(new_row)
+            item = self.tree.insert('', tk.END, values=new_row)
+            self.tree.selection_set(item)
+            self.tree.focus(item)
+            self.tree.see(item)
+
+
+
+
+
 
 
    
@@ -269,17 +310,27 @@ class Application:
                     cells[i].text = str(val)
 
         # 使用最后一条数据的承认日作为申请日期
-        apply_date = self.entries[-1][6]
+        apply_date = ""
+        for row in reversed(self.entries):
+            d = row[6].strip()
+            if d and (d.isdigit() and len(d) == 8 or (len(d) == 10 and '-' in d)):
+                apply_date = d
+                break
+
         try:
             if len(apply_date) == 8 and apply_date.isdigit():
                 y = int(apply_date[:4])
                 m = int(apply_date[4:6])
                 d = int(apply_date[6:8])
-                date_str = f"     {y}년 {m}월 {d}일"
+            elif len(apply_date) == 10 and '-' in apply_date:
+                y, m, d = [int(x) for x in apply_date.split('-')]
             else:
                 raise ValueError
+            date_str = f"     {y}년 {m:02d}월 {d:02d}일"
         except:
             date_str = "     ????년 ??월 ??일"
+
+
 
 
         doc.add_paragraph("\n\n")
@@ -296,10 +347,26 @@ class Application:
 
         doc.add_paragraph("\n한국스카우트 서울북부연맹  귀하").alignment = 1
 
-        filename = asksaveasfilename(defaultextension=".docx", filetypes=[("Word 文档", "*.docx")])
+
+
+                # 自动生成文件名
+        group_name = self.group_var.get().strip() or "团名"
+        badge_name = self.badge_var.get().strip() or "技能章"
+        date_part = apply_date.replace('-', '') if apply_date else "日期"
+
+        auto_filename = f"{group_name}-{badge_name}-{date_part}.docx"
+
+        filename = asksaveasfilename(
+            initialfile=auto_filename,
+            defaultextension=".docx",
+            filetypes=[("Word 文档", "*.docx")]
+        )
         if filename:
             doc.save(filename)
             messagebox.showinfo("成功", f"已保存到 {filename}")
+
+
+
 
     def delete_selected_row(self):
         selected_item = self.tree.focus()
@@ -396,13 +463,30 @@ class Application:
                 else:
                     engname = ' '.join(p.upper() for p in lazy_pinyin(name))
 
+                # 更新 name_map 字典
                 self.name_map[name] = {'英文名': engname, 'ID': id_}
+
+                # 构造插入数据（其余字段留空）
+                data = [
+                    len(self.entries) + 1,
+                    name,
+                    engname,
+                    id_,
+                    "",  # 现级别
+                    "",  # 技能章名
+                    "",  # 承认日
+                    "",  # 年级
+                    ""   # 备注
+                ]
+                self.entries.append(data)
+                self.tree.insert('', tk.END, values=data)
                 imported += 1
 
-            messagebox.showinfo("导入成功", f"成功导入 {imported} 条记录")
+            messagebox.showinfo("导入成功", f"成功导入并添加 {imported} 条记录到列表")
 
         except Exception as e:
             messagebox.showerror("错误", f"导入失败：{e}")
+
 
 
 # 启动程序
