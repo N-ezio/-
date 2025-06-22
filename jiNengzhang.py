@@ -163,7 +163,7 @@ class Application:
 
         #  年级与承认日
         ttk.Label(frame, text="年级(구분):").grid(row=3, column=0)
-        ttk.Combobox(frame, textvariable=self.grade_var, values=["小学", "初中", "高中"]).grid(row=3, column=1)
+        ttk.Combobox(frame, textvariable=self.grade_var, values=["小学(초등학교)", "初中(중학교)", "高中(고등학교)"]).grid(row=3, column=1)
 
         ttk.Label(frame, text="承认日(인가일) (YYYY-MM-DD):").grid(row=3, column=2)
         ttk.Entry(frame, textvariable=self.date_var).grid(row=3, column=3)
@@ -295,6 +295,39 @@ class Application:
         doc = Document()
         doc.add_heading("기능장 인가 보고서", 0)
         table = doc.add_table(rows=1, cols=9)
+
+        from docx.oxml import parse_xml
+        from docx.oxml.ns import nsdecls
+
+        tbl = table._tbl
+        borders_xml = (
+            '<w:tblBorders %s>'
+            '<w:top w:val="single" w:sz="6" w:space="0" w:color="auto"/>'
+            '<w:left w:val="single" w:sz="6" w:space="0" w:color="auto"/>'
+            '<w:bottom w:val="single" w:sz="6" w:space="0" w:color="auto"/>'
+            '<w:right w:val="single" w:sz="6" w:space="0" w:color="auto"/>'
+            '<w:insideH w:val="single" w:sz="6" w:space="0" w:color="auto"/>'
+            '<w:insideV w:val="single" w:sz="6" w:space="0" w:color="auto"/>'
+            '</w:tblBorders>' % nsdecls('w')
+        )
+
+        # 直接遍历 children 查找 tblPr
+        tblPr = None
+        for child in tbl:
+            if child.tag.endswith('tblPr'):
+                tblPr = child
+                break
+        if tblPr is None:
+            from lxml import etree
+            tblPr = etree.Element('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}tblPr')
+            tbl.insert(0, tblPr)
+        tblPr.append(parse_xml(borders_xml))
+
+
+
+
+
+
         headers = ["순", "성명姓名", "영어면英文名", "ID", "현급위现级别", "기능장명技能章名", "承认日", "S.V 구분年级", "备注비  고"]
         hdr_cells = table.rows[0].cells
         for i, h in enumerate(headers):
